@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JSON Editor</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --bg2: #161820;
+    --bg3: #1e2030;
+    --bg4: #252840;
+    --surface: #1a1d2e;
+    --surface2: #222436;
+    --border: #2a2d45;
+    --border2: #363a58;
+    --text: #c8d3f5;
+    --text2: #a9b8e8;
+    --text3: #636d9d;
+    --text4: #414868;
+    --accent: #82aaff;
+    --accent2: #7986e7;
+    --green: #c3e88d;
+    --teal: #4fd6be;
+    --orange: #ff9966;
+    --pink: #ff87a8;
+    --purple: #c099ff;
+    --yellow: #ffc777;
+    --red: #ff757f;
+    --success: #c3e88d;
+    --danger: #ff757f;
+    --radius: 6px;
+    --radius2: 10px;
+    --font: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+    --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ─── Header ─── */
+  header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+    flex-shrink: 0;
+  }
+  .logo svg { opacity: 0.9; }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .file-name {
+    font-size: 13px;
+    color: var(--text3);
+    font-family: var(--font);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--bg4);
+    color: var(--text3);
+    border: 1px solid var(--border);
+    font-family: var(--font-ui);
+  }
+  .badge.modified { background: rgba(255,199,119,0.1); color: var(--yellow); border-color: rgba(255,199,119,0.25); }
+
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    color: var(--text2);
+    font-size: 13px;
+    font-family: var(--font-ui);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .btn:hover { background: var(--bg4); border-color: var(--accent2); color: var(--accent); }
+  .btn:active { transform: scale(0.97); }
+  .btn.primary { background: var(--accent2); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: var(--accent); }
+  .btn.danger-btn { background: rgba(255,117,127,0.12); border-color: rgba(255,117,127,0.3); color: var(--red); }
+  .btn.danger-btn:hover { background: rgba(255,117,127,0.22); }
+  .btn.ghost { border-color: transparent; background: transparent; }
+  .btn.ghost:hover { background: var(--bg3); border-color: var(--border); }
+  .btn svg, .btn .icon { flex-shrink: 0; }
+
+  /* ─── Layout ─── */
+  .app-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .sidebar-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); }
+  .tree-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .tree-container::-webkit-scrollbar { width: 5px; }
+  .tree-container::-webkit-scrollbar-track { background: transparent; }
+  .tree-container::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  .main-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .editor-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+  }
+  .editor-area::-webkit-scrollbar { width: 6px; }
+  .editor-area::-webkit-scrollbar-track { background: transparent; }
+  .editor-area::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ─── Welcome / Drop Zone ─── */
+  .drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 16px;
+    text-align: center;
+    padding: 40px;
+  }
+  .drop-zone-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .drop-zone h2 { font-size: 18px; font-weight: 600; color: var(--text); }
+  .drop-zone p { font-size: 14px; color: var(--text3); max-width: 280px; line-height: 1.6; }
+  .drop-zone.dragging { border: 2px dashed var(--accent); border-radius: var(--radius2); background: rgba(130,170,255,0.04); }
+
+  /* ─── Tree Node ─── */
+  .node {
+    font-family: var(--font);
+    font-size: 13px;
+    user-select: none;
+  }
+  .node-row {
+    display: flex;
+    align-items: center;
+    padding: 3px 8px 3px 0;
+    gap: 0;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-radius: 4px;
+    margin: 0 4px;
+    position: relative;
+  }
+  .node-row:hover { background: var(--bg3); }
+  .node-row.selected { background: var(--bg4); }
+  .indent { display: inline-block; width: 16px; flex-shrink: 0; }
+  .toggle-btn {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--text3);
+    transition: color 0.15s;
+  }
+  .toggle-btn:hover { color: var(--text); }
+  .toggle-btn svg { transition: transform 0.15s; }
+  .toggle-btn.collapsed svg { transform: rotate(-90deg); }
+  .toggle-spacer { width: 18px; flex-shrink: 0; }
+  .node-key {
+    color: var(--pink);
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .node-colon { color: var(--text4); margin: 0 4px; flex-shrink: 0; }
+  .node-value { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .type-string { color: var(--green); }
+  .type-number { color: var(--orange); }
+  .type-boolean { color: var(--purple); }
+  .type-null { color: var(--text4); font-style: italic; }
+  .type-object, .type-array { color: var(--text3); }
+  .node-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
+  .node-row:hover .node-actions { opacity: 1; }
+  .icon-btn {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text3);
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: var(--bg4); color: var(--text); }
+  .icon-btn.del:hover { background: rgba(255,117,127,0.15); color: var(--red); }
+  .icon-btn.add:hover { background: rgba(195,232,141,0.15); color: var(--green); }
+  .node-children { }
+  .node-children.hidden { display: none; }
+
+  /* ─── Inline editing ─── */
+  .edit-input {
+    font-family: var(--font);
+    font-size: 13px;
+    background: var(--bg3);
+    border: 1px solid var(--accent2);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 1px 6px;
+    outline: none;
+    min-width: 60px;
+    max-width: 200px;
+  }
+  .edit-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(130,170,255,0.15); }
+
+  /* ─── Detail Panel (right) ─── */
+  .detail-panel {
+    width: 340px;
+    flex-shrink: 0;
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .detail-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .detail-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); }
+  .detail-body { flex: 1; overflow-y: auto; padding: 16px; }
+  .field-group { margin-bottom: 14px; }
+  .field-label { font-size: 11px; color: var(--text3); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .field-input, .field-select, .field-textarea {
+    width: 100%;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 13px;
+    padding: 7px 10px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field-input:focus, .field-select:focus, .field-textarea:focus {
+    border-color: var(--accent2);
+    box-shadow: 0 0 0 2px rgba(130,170,255,0.1);
+  }
+  .field-textarea { resize: vertical; min-height: 80px; }
+  .field-select option { background: var(--bg3); color: var(--text); }
+  .field-row { display: flex; gap: 8px; }
+  .field-row .field-group { flex: 1; }
+  .field-hint { font-size: 11px; color: var(--text4); margin-top: 4px; line-height: 1.5; }
+  .detail-actions { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; }
+  .type-pill {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    font-family: var(--font);
+  }
+  .pill-string { background: rgba(195,232,141,0.12); color: var(--green); }
+  .pill-number { background: rgba(255,153,102,0.12); color: var(--orange); }
+  .pill-boolean { background: rgba(192,153,255,0.12); color: var(--purple); }
+  .pill-null { background: rgba(65,72,104,0.4); color: var(--text3); }
+  .pill-object { background: rgba(130,170,255,0.1); color: var(--accent); }
+  .pill-array { background: rgba(79,214,190,0.1); color: var(--teal); }
+  .path-display {
+    font-family: var(--font);
+    font-size: 12px;
+    color: var(--text3);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    word-break: break-all;
+    line-height: 1.7;
+  }
+
+  /* ─── Toolbar ─── */
+  .toolbar {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--bg2);
+  }
+  .search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    flex: 1;
+    max-width: 280px;
+  }
+  .search-box input {
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--font-ui);
+    outline: none;
+    flex: 1;
+    min-width: 0;
+  }
+  .search-box input::placeholder { color: var(--text4); }
+  .search-box svg { color: var(--text3); flex-shrink: 0; }
+
+  /* ─── Stats bar ─── */
+  .stats-bar {
+    padding: 6px 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text3);
+    background: var(--bg2);
+    flex-shrink: 0;
+  }
+  .stat-item { display: flex; align-items: center; gap: 5px; }
+  .stat-val { color: var(--text2); font-weight: 500; font-family: var(--font); }
+
+  /* ─── Add Node Modal ─── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    display: none;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius2);
+    width: 440px;
+    max-width: 95vw;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    overflow: hidden;
+  }
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-title { font-size: 15px; font-weight: 600; color: var(--text); }
+  .modal-body { padding: 20px; }
+  .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ─── Raw JSON view ─── */
+  .raw-view {
+    display: none;
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+  }
+  .raw-view.active { display: block; }
+  .raw-view pre {
+    font-family: var(--font);
+    font-size: 13px;
+    color: var(--text);
+    white-space: pre;
+    line-height: 1.7;
+  }
+  .view-toggle { display: flex; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .view-tab {
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--text3);
+    font-weight: 500;
+    transition: all 0.15s;
+    border: none;
+    background: transparent;
+    font-family: var(--font-ui);
+  }
+  .view-tab.active { background: var(--bg4); color: var(--text); }
+
+  /* ─── Notifications ─── */
+  .toast-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 9999;
+  }
+  .toast {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 16px;
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    animation: slideIn 0.2s ease;
+  }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error { border-left: 3px solid var(--red); }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+  /* ─── Checkbox ─── */
+  .bool-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .toggle-switch {
+    width: 36px; height: 20px;
+    background: var(--border2);
+    border-radius: 20px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: none;
+    flex-shrink: 0;
+  }
+  .toggle-switch.on { background: var(--accent2); }
+  .toggle-switch::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: transform 0.2s;
+  }
+  .toggle-switch.on::after { transform: translateX(16px); }
+
+  /* scrollbar for detail */
+  .detail-body::-webkit-scrollbar { width: 5px; }
+  .detail-body::-webkit-scrollbar-track { background: transparent; }
+  .detail-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* node index pill for arrays */
+  .index-pill {
+    font-size: 11px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(79,214,190,0.1);
+    color: var(--teal);
+    font-weight: 600;
+    margin-right: 2px;
+  }
+
+  .empty-msg {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text3);
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>
+    JSON Editor
+  </div>
+  <span class="file-name" id="fileName">No file loaded</span>
+  <span class="badge modified" id="modBadge" style="display:none">● Modified</span>
+  <div class="header-actions">
+    <label class="btn ghost" id="openBtn" style="cursor:pointer">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Open
+      <input type="file" id="fileInput" accept=".json" style="display:none">
+    </label>
+    <button class="btn" id="saveBtn" onclick="saveFile()" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+      Save
+    </button>
+    <button class="btn primary" id="exportBtn" onclick="exportFile()" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export
+    </button>
+  </div>
+</header>
+
+<!-- Body -->
+<div class="app-body">
+  <!-- Left: Tree -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Structure</span>
+      <button class="btn ghost" style="padding:3px 8px;font-size:12px;" id="collapseAllBtn" onclick="collapseAll()">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>
+        Collapse all
+      </button>
+    </div>
+    <div class="tree-container" id="treeContainer">
+      <div class="empty-msg">Open a JSON file to get started</div>
+    </div>
+  </div>
+
+  <!-- Center: Main editor -->
+  <div class="main-panel">
+    <div class="toolbar">
+      <div class="search-box">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="searchInput" placeholder="Search keys or values…" oninput="filterTree()">
+      </div>
+      <div class="view-toggle">
+        <button class="view-tab active" onclick="switchView('tree')" id="treeTab">Tree</button>
+        <button class="view-tab" onclick="switchView('raw')" id="rawTab">Raw JSON</button>
+      </div>
+      <button class="btn" onclick="showAddModal(null)" id="addRootBtn" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add field
+      </button>
+      <button class="btn" onclick="expandAll()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        Expand all
+      </button>
+    </div>
+
+    <div class="editor-area" id="mainEditor">
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#82aaff" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h2>Open a JSON file</h2>
+        <p>Click <strong>Open</strong> above or drag and drop a .json file anywhere in the window to start editing.</p>
+        <button class="btn primary" onclick="document.getElementById('fileInput').click()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Choose file
+        </button>
+      </div>
+    </div>
+
+    <div class="raw-view" id="rawView">
+      <pre id="rawPre"></pre>
+    </div>
+
+    <div class="stats-bar" id="statsBar" style="display:none">
+      <div class="stat-item">Keys: <span class="stat-val" id="statKeys">0</span></div>
+      <div class="stat-item">Depth: <span class="stat-val" id="statDepth">0</span></div>
+      <div class="stat-item">Arrays: <span class="stat-val" id="statArrays">0</span></div>
+      <div class="stat-item">Size: <span class="stat-val" id="statSize">0 B</span></div>
+    </div>
+  </div>
+
+  <!-- Right: Detail -->
+  <div class="detail-panel">
+    <div class="detail-header">
+      <span class="detail-title">Edit Field</span>
+    </div>
+    <div class="detail-body" id="detailBody">
+      <div class="empty-msg" style="margin-top:60px">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text4);margin:0 auto 12px;display:block"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Select a node to edit it
+      </div>
+    </div>
+    <div class="detail-actions" id="detailActions" style="display:none">
+      <button class="btn primary" onclick="applyDetail()">Apply changes</button>
+      <button class="btn danger-btn" id="detailDeleteBtn" onclick="deleteSelected()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Field Modal -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Add field</span>
+      <button class="icon-btn" onclick="closeModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field-group" id="modalKeyGroup">
+        <div class="field-label">Key</div>
+        <input type="text" class="field-input" id="modalKey" placeholder="field_name">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Type</div>
+        <select class="field-select" id="modalType" onchange="onModalTypeChange()">
+          <option value="string">String</option>
+          <option value="number">Number</option>
+          <option value="boolean">Boolean</option>
+          <option value="null">Null</option>
+          <option value="object">Object {}</option>
+          <option value="array">Array []</option>
+        </select>
+      </div>
+      <div class="field-group" id="modalValueGroup">
+        <div class="field-label">Value</div>
+        <input type="text" class="field-input" id="modalValue" placeholder="Enter value…">
+      </div>
+      <div class="field-group" id="modalBoolGroup" style="display:none">
+        <div class="field-label">Value</div>
+        <div class="bool-toggle">
+          <button class="toggle-switch on" id="modalBoolSwitch" onclick="toggleModalBool()"></button>
+          <span id="modalBoolLabel" style="font-size:13px;font-family:var(--font);color:var(--purple)">true</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="confirmAdd()">Add field</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────
+let jsonData = null;
+let originalText = '';
+let fileName = '';
+let modified = false;
+let selectedPath = null;
+let addTargetPath = null;
+let addTargetIsArray = false;
+let collapsedPaths = new Set();
+let searchQuery = '';
+let currentView = 'tree';
+let modalBoolValue = true;
+
+// ─── File Loading ─────────────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (file) loadFile(file);
+  e.target.value = '';
+});
+
+// Drag and drop
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.add('dragging');
+});
+document.addEventListener('dragleave', e => {
+  if (!e.relatedTarget) document.getElementById('dropZone').classList.remove('dragging');
+});
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  document.getElementById('dropZone').classList.remove('dragging');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.json')) loadFile(file);
+  else if (file) toast('Please drop a .json file', 'error');
+});
+
+function loadFile(file) {
+  fileName = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      originalText = e.target.result;
+      jsonData = JSON.parse(originalText);
+      modified = false;
+      collapsedPaths = new Set();
+      selectedPath = null;
+      renderAll();
+      toast(`Loaded: ${fileName}`, 'success');
+    } catch(err) {
+      toast('Invalid JSON: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ─── Render ───────────────────────────────────────────────────────────
+function renderAll() {
+  // update header
+  document.getElementById('fileName').textContent = fileName;
+  document.getElementById('modBadge').style.display = modified ? 'inline-flex' : 'none';
+  document.getElementById('saveBtn').disabled = false;
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('addRootBtn').disabled = false;
+
+  // hide drop zone, show stats
+  document.getElementById('dropZone').style.display = 'none';
+  document.getElementById('statsBar').style.display = 'flex';
+
+  // tree
+  const tree = document.getElementById('treeContainer');
+  tree.innerHTML = '';
+  const rootNode = buildNode(jsonData, null, 0, '', false);
+  tree.appendChild(rootNode);
+
+  // raw
+  updateRaw();
+
+  // stats
+  updateStats();
+
+  // detail - reset if selected path gone
+  if (selectedPath !== null) {
+    if (getByPath(selectedPath) === undefined) {
+      selectedPath = null;
+      renderDetail(null);
+    }
+  }
+}
+
+function buildNode(val, key, depth, path, isArrayItem) {
+  const type = getType(val);
+  const isContainer = type === 'object' || type === 'array';
+  const collapsed = collapsedPaths.has(path);
+  const wrapper = document.createElement('div');
+  wrapper.className = 'node';
+  wrapper.dataset.path = path;
+
+  const row = document.createElement('div');
+  row.className = 'node-row' + (selectedPath === path ? ' selected' : '');
+  row.dataset.path = path;
+  row.onclick = e => { if (!e.target.closest('.icon-btn') && !e.target.closest('.toggle-btn')) selectNode(path); };
+
+  // indentation
+  for (let i = 0; i < depth; i++) {
+    const ind = document.createElement('span');
+    ind.className = 'indent';
+    row.appendChild(ind);
+  }
+
+  // toggle or spacer
+  if (isContainer) {
+    const toggle = document.createElement('div');
+    toggle.className = 'toggle-btn' + (collapsed ? ' collapsed' : '');
+    toggle.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`;
+    toggle.onclick = e => { e.stopPropagation(); toggleCollapse(path); };
+    row.appendChild(toggle);
+  } else {
+    const sp = document.createElement('div');
+    sp.className = 'toggle-spacer';
+    row.appendChild(sp);
+  }
+
+  // key
+  if (key !== null) {
+    const keySpan = document.createElement('span');
+    if (isArrayItem) {
+      keySpan.innerHTML = `<span class="index-pill">${key}</span>`;
+    } else {
+      keySpan.className = 'node-key';
+      keySpan.textContent = `"${key}"`;
+    }
+    row.appendChild(keySpan);
+    const colon = document.createElement('span');
+    colon.className = 'node-colon';
+    colon.textContent = ':';
+    row.appendChild(colon);
+  }
+
+  // value preview
+  const valSpan = document.createElement('span');
+  valSpan.className = 'node-value type-' + type;
+  if (isContainer) {
+    const count = Array.isArray(val) ? val.length : Object.keys(val).length;
+    const bracket = Array.isArray(val) ? ['[', ']'] : ['{', '}'];
+    valSpan.textContent = collapsed
+      ? `${bracket[0]} ${count} ${count === 1 ? (Array.isArray(val) ? 'item' : 'key') : (Array.isArray(val) ? 'items' : 'keys')} ${bracket[1]}`
+      : bracket[0];
+    valSpan.style.color = 'var(--text3)';
+  } else {
+    valSpan.textContent = formatValue(val, type);
+  }
+  row.appendChild(valSpan);
+
+  // actions
+  const actions = document.createElement('div');
+  actions.className = 'node-actions';
+
+  if (isContainer) {
+    const addBtn = document.createElement('button');
+    addBtn.className = 'icon-btn add';
+    addBtn.title = 'Add child field';
+    addBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+    addBtn.onclick = e => { e.stopPropagation(); showAddModal(path, Array.isArray(val)); };
+    actions.appendChild(addBtn);
+  }
+
+  if (key !== null) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'icon-btn';
+    editBtn.title = 'Edit';
+    editBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+    editBtn.onclick = e => { e.stopPropagation(); selectNode(path); };
+    actions.appendChild(editBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'icon-btn del';
+    delBtn.title = 'Delete';
+    delBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>`;
+    delBtn.onclick = e => { e.stopPropagation(); deleteNode(path); };
+    actions.appendChild(delBtn);
+  }
+
+  row.appendChild(actions);
+  wrapper.appendChild(row);
+
+  // children
+  if (isContainer) {
+    const children = document.createElement('div');
+    children.className = 'node-children' + (collapsed ? ' hidden' : '');
+
+    if (Array.isArray(val)) {
+      val.forEach((item, i) => {
+        const childPath = path ? `${path}.${i}` : `${i}`;
+        children.appendChild(buildNode(item, i, depth + 1, childPath, true));
+      });
+    } else {
+      Object.keys(val).forEach(k => {
+        const childPath = path ? `${path}.${k}` : k;
+        children.appendChild(buildNode(val[k], k, depth + 1, childPath, false));
+      });
+    }
+
+    // closing bracket
+    if (!collapsed) {
+      const closingRow = document.createElement('div');
+      closingRow.className = 'node-row';
+      closingRow.style.cursor = 'default';
+      for (let i = 0; i < depth; i++) {
+        const ind = document.createElement('span');
+        ind.className = 'indent';
+        closingRow.appendChild(ind);
+      }
+      const sp2 = document.createElement('div');
+      sp2.className = 'toggle-spacer';
+      closingRow.appendChild(sp2);
+      const closing = document.createElement('span');
+      closing.style.cssText = 'color:var(--text3);font-family:var(--font);font-size:13px;';
+      closing.textContent = Array.isArray(val) ? ']' : '}';
+      closingRow.appendChild(closing);
+      children.appendChild(closingRow);
+    }
+
+    wrapper.appendChild(children);
+  }
+
+  return wrapper;
+}
+
+function toggleCollapse(path) {
+  if (collapsedPaths.has(path)) collapsedPaths.delete(path);
+  else collapsedPaths.add(path);
+  renderAll();
+}
+
+function expandAll() { collapsedPaths.clear(); renderAll(); }
+function collapseAll() {
+  // collapse all objects/arrays
+  walkPaths(jsonData, '', (val, path) => {
+    if (val && typeof val === 'object') collapsedPaths.add(path);
+  });
+  renderAll();
+}
+
+function walkPaths(val, path, cb) {
+  cb(val, path);
+  if (val && typeof val === 'object') {
+    if (Array.isArray(val)) {
+      val.forEach((item, i) => walkPaths(item, path ? `${path}.${i}` : `${i}`, cb));
+    } else {
+      Object.keys(val).forEach(k => walkPaths(val[k], path ? `${path}.${k}` : k, cb));
+    }
+  }
+}
+
+// ─── Path utilities ───────────────────────────────────────────────────
+function parsePath(path) {
+  if (!path) return [];
+  return path.split('.').map(p => /^\d+$/.test(p) ? parseInt(p) : p);
+}
+
+function getByPath(path) {
+  if (path === '') return jsonData;
+  const parts = parsePath(path);
+  let cur = jsonData;
+  for (const p of parts) {
+    if (cur == null || typeof cur !== 'object') return undefined;
+    cur = cur[p];
+  }
+  return cur;
+}
+
+function setByPath(path, val) {
+  if (path === '') { jsonData = val; return; }
+  const parts = parsePath(path);
+  let cur = jsonData;
+  for (let i = 0; i < parts.length - 1; i++) {
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = val;
+}
+
+function deleteByPath(path) {
+  const parts = parsePath(path);
+  let cur = jsonData;
+  for (let i = 0; i < parts.length - 1; i++) cur = cur[parts[i]];
+  const last = parts[parts.length - 1];
+  if (Array.isArray(cur)) cur.splice(last, 1);
+  else delete cur[last];
+}
+
+function getParentPath(path) {
+  const parts = parsePath(path);
+  parts.pop();
+  return parts.join('.');
+}
+
+function getKey(path) {
+  const parts = parsePath(path);
+  return parts[parts.length - 1];
+}
+
+// ─── Selection & Detail Panel ─────────────────────────────────────────
+function selectNode(path) {
+  selectedPath = path;
+  // highlight in tree
+  document.querySelectorAll('.node-row.selected').forEach(el => el.classList.remove('selected'));
+  const row = document.querySelector(`.node-row[data-path="${CSS.escape(path)}"]`);
+  if (row) row.classList.add('selected');
+  renderDetail(path);
+}
+
+function renderDetail(path) {
+  const body = document.getElementById('detailBody');
+  const actions = document.getElementById('detailActions');
+
+  if (path === null || path === undefined) {
+    body.innerHTML = `<div class="empty-msg" style="margin-top:60px">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text4);margin:0 auto 12px;display:block"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Select a node to edit it
+    </div>`;
+    actions.style.display = 'none';
+    return;
+  }
+
+  const val = getByPath(path);
+  const type = getType(val);
+  const key = getKey(path);
+  const parentVal = getByPath(getParentPath(path));
+  const isRoot = path === '';
+  const isArrayItem = Array.isArray(parentVal);
+
+  let html = '';
+
+  // Path display
+  html += `<div class="field-group">
+    <div class="field-label">Path</div>
+    <div class="path-display">${path || '(root)'}</div>
+  </div>`;
+
+  // Type
+  html += `<div class="field-group">
+    <div class="field-label">Type</div>
+    <span class="type-pill pill-${type}">${type}</span>
+  </div>`;
+
+  // Key edit (not root, not array item)
+  if (!isRoot && !isArrayItem) {
+    html += `<div class="field-group">
+      <div class="field-label">Key</div>
+      <input type="text" class="field-input" id="detailKey" value="${escapeHtml(String(key))}" placeholder="key name">
+    </div>`;
+  }
+
+  // Value editing
+  if (type === 'boolean') {
+    html += `<div class="field-group">
+      <div class="field-label">Value</div>
+      <div class="bool-toggle">
+        <button class="toggle-switch ${val ? 'on' : ''}" id="detailBoolSwitch" onclick="toggleDetailBool()"></button>
+        <span id="detailBoolLabel" style="font-size:13px;font-family:var(--font);color:var(--purple)">${val}</span>
+      </div>
+    </div>`;
+  } else if (type === 'string') {
+    const multiline = val.includes('\n') || val.length > 80;
+    if (multiline) {
+      html += `<div class="field-group">
+        <div class="field-label">Value</div>
+        <textarea class="field-textarea" id="detailValue">${escapeHtml(val)}</textarea>
+      </div>`;
+    } else {
+      html += `<div class="field-group">
+        <div class="field-label">Value</div>
+        <input type="text" class="field-input" id="detailValue" value="${escapeHtml(val)}" style="width:100%">
+      </div>`;
+    }
+  } else if (type === 'number') {
+    html += `<div class="field-group">
+      <div class="field-label">Value</div>
+      <input type="number" class="field-input" id="detailValue" value="${val}" step="any" style="width:100%">
+    </div>`;
+  } else if (type === 'null') {
+    html += `<div class="field-group">
+      <div class="field-label">Value</div>
+      <div style="font-family:var(--font);font-size:13px;color:var(--text4);font-style:italic">null</div>
+    </div>`;
+  } else if (type === 'object') {
+    const count = Object.keys(val).length;
+    html += `<div class="field-group">
+      <div class="field-label">Contents</div>
+      <div style="font-size:13px;color:var(--text2)">${count} key${count !== 1 ? 's' : ''}</div>
+    </div>`;
+  } else if (type === 'array') {
+    html += `<div class="field-group">
+      <div class="field-label">Contents</div>
+      <div style="font-size:13px;color:var(--text2)">${val.length} item${val.length !== 1 ? 's' : ''}</div>
+    </div>`;
+  }
+
+  // Change type (not root, not container)
+  if (!isRoot) {
+    html += `<div class="field-group">
+      <div class="field-label">Change type to</div>
+      <select class="field-select" id="detailType" onchange="onDetailTypeChange()">
+        <option value="string" ${type==='string'?'selected':''}>String</option>
+        <option value="number" ${type==='number'?'selected':''}>Number</option>
+        <option value="boolean" ${type==='boolean'?'selected':''}>Boolean</option>
+        <option value="null" ${type==='null'?'selected':''}>Null</option>
+        <option value="object" ${type==='object'?'selected':''}>Object {}</option>
+        <option value="array" ${type==='array'?'selected':''}>Array []</option>
+      </select>
+      <div class="field-hint">Changing to object/array will replace the current value.</div>
+    </div>`;
+  }
+
+  body.innerHTML = html;
+  actions.style.display = 'flex';
+
+  if (isRoot) {
+    document.getElementById('detailDeleteBtn').style.display = 'none';
+  } else {
+    document.getElementById('detailDeleteBtn').style.display = '';
+  }
+}
+
+function toggleDetailBool() {
+  const sw = document.getElementById('detailBoolSwitch');
+  const lbl = document.getElementById('detailBoolLabel');
+  sw.classList.toggle('on');
+  lbl.textContent = sw.classList.contains('on') ? 'true' : 'false';
+}
+
+function onDetailTypeChange() {
+  // Re-render detail with new type
+  const newType = document.getElementById('detailType').value;
+  const body = document.getElementById('detailBody');
+  // Just save the type to be applied on Apply
+}
+
+function applyDetail() {
+  if (selectedPath === null) return;
+  const val = getByPath(selectedPath);
+  const type = getType(val);
+  const key = getKey(selectedPath);
+  const parentVal = getByPath(getParentPath(selectedPath));
+  const isRoot = selectedPath === '';
+  const isArrayItem = Array.isArray(parentVal);
+
+  // Get new type
+  let newType = type;
+  const typeEl = document.getElementById('detailType');
+  if (typeEl) newType = typeEl.value;
+
+  // Build new value
+  let newVal;
+  if (newType === 'object') newVal = {};
+  else if (newType === 'array') newVal = [];
+  else if (newType === 'null') newVal = null;
+  else if (newType === 'boolean') {
+    const sw = document.getElementById('detailBoolSwitch');
+    newVal = sw ? sw.classList.contains('on') : val;
+  } else if (newType === 'number') {
+    const el = document.getElementById('detailValue');
+    newVal = el ? parseFloat(el.value) || 0 : val;
+  } else {
+    const el = document.getElementById('detailValue');
+    newVal = el ? el.value : String(val);
+  }
+
+  setByPath(selectedPath, newVal);
+
+  // Rename key if changed
+  if (!isRoot && !isArrayItem) {
+    const keyEl = document.getElementById('detailKey');
+    if (keyEl) {
+      const newKey = keyEl.value.trim();
+      if (newKey && newKey !== String(key)) {
+        const parent = getByPath(getParentPath(selectedPath));
+        const parentKeys = Object.keys(parent);
+        const idx = parentKeys.indexOf(String(key));
+        // Rebuild object preserving order
+        const rebuilt = {};
+        parentKeys.forEach((k, i) => {
+          if (k === String(key)) rebuilt[newKey] = newVal;
+          else rebuilt[k] = parent[k];
+        });
+        // Set parent
+        const parentPath = getParentPath(selectedPath);
+        setByPath(parentPath || '', rebuilt);
+        // Update selected path
+        selectedPath = (parentPath ? parentPath + '.' : '') + newKey;
+      }
+    }
+  }
+
+  markModified();
+  renderAll();
+  selectNode(selectedPath);
+  toast('Changes applied', 'success');
+}
+
+function deleteSelected() { deleteNode(selectedPath); }
+
+function deleteNode(path) {
+  if (!path) { toast('Cannot delete root', 'error'); return; }
+  deleteByPath(path);
+  if (selectedPath === path) { selectedPath = null; }
+  markModified();
+  renderAll();
+  toast('Field deleted', 'success');
+}
+
+// ─── Add Modal ────────────────────────────────────────────────────────
+function showAddModal(targetPath, isArray) {
+  addTargetPath = targetPath;
+  addTargetIsArray = isArray || false;
+
+  const isArr = addTargetIsArray;
+  document.getElementById('modalTitle').textContent = targetPath === null
+    ? 'Add root field' : `Add field to ${targetPath || 'root'}`;
+  document.getElementById('modalKeyGroup').style.display = isArr ? 'none' : 'block';
+  document.getElementById('modalKey').value = '';
+  document.getElementById('modalValue').value = '';
+  document.getElementById('modalType').value = 'string';
+  document.getElementById('modalValueGroup').style.display = 'block';
+  document.getElementById('modalBoolGroup').style.display = 'none';
+  modalBoolValue = true;
+  document.getElementById('modalBoolSwitch').className = 'toggle-switch on';
+  document.getElementById('modalBoolLabel').textContent = 'true';
+
+  document.getElementById('addModal').classList.add('open');
+  setTimeout(() => {
+    const el = isArr ? document.getElementById('modalValue') : document.getElementById('modalKey');
+    if (el) el.focus();
+  }, 50);
+}
+
+function closeModal() { document.getElementById('addModal').classList.remove('open'); }
+
+function onModalTypeChange() {
+  const type = document.getElementById('modalType').value;
+  const valGroup = document.getElementById('modalValueGroup');
+  const boolGroup = document.getElementById('modalBoolGroup');
+  if (type === 'boolean') { valGroup.style.display = 'none'; boolGroup.style.display = 'block'; }
+  else if (type === 'null' || type === 'object' || type === 'array') { valGroup.style.display = 'none'; boolGroup.style.display = 'none'; }
+  else { valGroup.style.display = 'block'; boolGroup.style.display = 'none'; }
+}
+
+function toggleModalBool() {
+  const sw = document.getElementById('modalBoolSwitch');
+  const lbl = document.getElementById('modalBoolLabel');
+  sw.classList.toggle('on');
+  modalBoolValue = sw.classList.contains('on');
+  lbl.textContent = modalBoolValue ? 'true' : 'false';
+}
+
+function confirmAdd() {
+  const type = document.getElementById('modalType').value;
+  const keyEl = document.getElementById('modalKey');
+  const key = keyEl ? keyEl.value.trim() : null;
+
+  // Validate key for non-arrays
+  if (!addTargetIsArray && addTargetPath !== null && !key) {
+    toast('Key is required', 'error'); return;
+  }
+  if (!addTargetIsArray && addTargetPath === null && !key) {
+    toast('Key is required for root object', 'error'); return;
+  }
+
+  let newVal;
+  if (type === 'object') newVal = {};
+  else if (type === 'array') newVal = [];
+  else if (type === 'null') newVal = null;
+  else if (type === 'boolean') newVal = modalBoolValue;
+  else if (type === 'number') { newVal = parseFloat(document.getElementById('modalValue').value) || 0; }
+  else newVal = document.getElementById('modalValue').value;
+
+  // Insert
+  if (addTargetPath === null) {
+    // Add to root
+    if (Array.isArray(jsonData)) jsonData.push(newVal);
+    else jsonData[key] = newVal;
+  } else {
+    const target = getByPath(addTargetPath);
+    if (Array.isArray(target)) target.push(newVal);
+    else target[key] = newVal;
+  }
+
+  markModified();
+  closeModal();
+  renderAll();
+  toast(`Field "${key || 'item'}" added`, 'success');
+}
+
+// ─── Search / Filter ──────────────────────────────────────────────────
+function filterTree() {
+  searchQuery = document.getElementById('searchInput').value.toLowerCase();
+  // Naive: just re-render with highlight (for simplicity)
+  // A real implementation would walk the tree and hide non-matching nodes
+  // Here we expand all and let the user scroll
+  if (searchQuery) expandAll();
+  else renderAll();
+  // Highlight matching text in tree (DOM walk)
+  if (searchQuery) {
+    document.querySelectorAll('.node-key, .node-value').forEach(el => {
+      const txt = el.textContent.toLowerCase();
+      if (txt.includes(searchQuery)) {
+        el.style.background = 'rgba(255,199,119,0.2)';
+        el.style.borderRadius = '3px';
+      } else {
+        el.style.background = '';
+      }
+    });
+  }
+}
+
+// ─── View switch ──────────────────────────────────────────────────────
+function switchView(view) {
+  currentView = view;
+  const treeArea = document.getElementById('mainEditor');
+  const rawArea = document.getElementById('rawView');
+  const treeTab = document.getElementById('treeTab');
+  const rawTab = document.getElementById('rawTab');
+
+  if (view === 'raw') {
+    treeArea.style.display = 'none';
+    rawArea.classList.add('active');
+    treeTab.classList.remove('active');
+    rawTab.classList.add('active');
+    updateRaw();
+  } else {
+    treeArea.style.display = '';
+    rawArea.classList.remove('active');
+    treeTab.classList.add('active');
+    rawTab.classList.remove('active');
+  }
+}
+
+function updateRaw() {
+  if (!jsonData) return;
+  document.getElementById('rawPre').textContent = JSON.stringify(jsonData, null, 2);
+}
+
+// ─── Save / Export ────────────────────────────────────────────────────
+function getOutputText() {
+  // Preserve original formatting style (detect indent)
+  let indent = 2;
+  const match = originalText.match(/^[\s\S]*?\n(\s+)/);
+  if (match) {
+    const ws = match[1];
+    if (ws.includes('\t')) indent = '\t';
+    else indent = ws.length;
+  }
+  return JSON.stringify(jsonData, null, indent);
+}
+
+function saveFile() {
+  if (!jsonData) return;
+  const text = getOutputText();
+  originalText = text;
+  modified = false;
+  document.getElementById('modBadge').style.display = 'none';
+  // Trigger download
+  downloadText(text, fileName || 'data.json', 'application/json');
+  toast(`Saved: ${fileName}`, 'success');
+}
+
+function exportFile() {
+  if (!jsonData) return;
+  const text = getOutputText();
+  const name = (fileName || 'data').replace('.json', '') + '_edited.json';
+  downloadText(text, name, 'application/json');
+  toast(`Exported: ${name}`, 'success');
+}
+
+function downloadText(text, name, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────
+function getType(val) {
+  if (val === null) return 'null';
+  if (Array.isArray(val)) return 'array';
+  return typeof val;
+}
+
+function formatValue(val, type) {
+  if (type === 'string') return `"${val.length > 60 ? val.slice(0, 60) + '…' : val}"`;
+  if (type === 'null') return 'null';
+  return String(val);
+}
+
+function markModified() {
+  modified = true;
+  document.getElementById('modBadge').style.display = 'inline-flex';
+}
+
+function updateStats() {
+  if (!jsonData) return;
+  let keys = 0, depth = 0, arrays = 0;
+  function walk(v, d) {
+    if (d > depth) depth = d;
+    if (v && typeof v === 'object') {
+      if (Array.isArray(v)) { arrays++; v.forEach(i => walk(i, d + 1)); }
+      else { const ks = Object.keys(v); keys += ks.length; ks.forEach(k => walk(v[k], d + 1)); }
+    }
+  }
+  walk(jsonData, 0);
+  const text = JSON.stringify(jsonData);
+  const bytes = new TextEncoder().encode(text).length;
+  const size = bytes < 1024 ? bytes + ' B' : bytes < 1048576 ? (bytes/1024).toFixed(1) + ' KB' : (bytes/1048576).toFixed(2) + ' MB';
+
+  document.getElementById('statKeys').textContent = keys;
+  document.getElementById('statDepth').textContent = depth;
+  document.getElementById('statArrays').textContent = arrays;
+  document.getElementById('statSize').textContent = size;
+}
+
+function toast(msg, type = 'success') {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  const icon = type === 'success'
+    ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>`
+    : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+  t.innerHTML = icon + msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2800);
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function CSS_escape(str) { return str.replace(/[[\]().+*?^${}|\\]/g, '\\$&'); }
+
+// Close modal on overlay click
+document.getElementById('addModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveFile(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'o') { e.preventDefault(); document.getElementById('fileInput').click(); }
+});
+</script>
+</body>
+</html>
